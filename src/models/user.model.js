@@ -56,12 +56,17 @@ const userSchema = new Schema(
 
 )
 
+// Pre-save Middleware Hook:
+
 userSchema.pre("save", async function (next){
     if(!this.isModified("password")) return next()
     
     this.password = bcrypt.hash(this.password,10)
     next()
 })
+
+// This is where you can define instance methods for documents created with the userSchema. 
+// Instance methods are functions that can be called on instances (documents) of the model.
 
 userSchema.methods.isPasswordCorrect = async function(password){
    return await bcrypt.compare(password, this.password)
