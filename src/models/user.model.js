@@ -72,16 +72,20 @@ userSchema.methods.isPasswordCorrect = async function(password){
    return await bcrypt.compare(password, this.password)
 }
 
+// This method generates a JSON Web Token (JWT) for a user instance. 
 userSchema.methods.generateAccessToken = function(){
     return jwt.sign({
+        //Payload
         _id:this._id,
         email:this.email,
         username:this.username,
         fullname: this.fullname
 
     },
-    process.env.ACCESS_TOKEN_SECRET,
+    // Secret or Private Key
+    process.env.ACCESS_TOKEN_SECRET, 
     {
+        // Options
         expiresIn:process.env.ACCESS_TOKEN_EXPIRY
     }
 )
