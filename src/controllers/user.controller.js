@@ -18,7 +18,6 @@ import { ApiResponse } from "../utils/ApiResponse.js";
     
     //gets values from frontend by destructuring 
     const{fullname,username,email,password}=req.body
-    console.log("username",username);
 
     //validation - empty fields 
     if([fullname,username,email,password].some((field)=>field?.trim()==="")){
@@ -26,7 +25,7 @@ import { ApiResponse } from "../utils/ApiResponse.js";
      }
 
      //It performs a query to find a single document in the User collection that matches one of the specified conditions. 
-     const existedUSer= User.findOne({
+     const existedUSer = await User.findOne({
         $or: [{ username },{ email }]
      })
 
@@ -35,8 +34,15 @@ import { ApiResponse } from "../utils/ApiResponse.js";
      }
 
      //gets local path of avatar and coverImage
-     const avtarLocalPath= req.files?.avatar[0]?.path;
-     const coverImageLocalPath= req.files?.coverImage[0]?.path;
+     //  The ternary operator is used to provide a default value (undefined in this case) if any part of the chain is missing, thus preventing runtime errors.
+     const avtarLocalPath= req.files && req.files.avatar && req.files.avatar[0] ? req.files.avatar[0].path : undefined;
+     const coverImageLocalPath= req.files && req.files.coverImage && req.files.coverImage[0] ? req.files.coverImage[0].path : undefined;
+ 
+    //another way of checking any part of the chain is missing
+    //  let coverImageLocalPath;
+    //  if(req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length > 0 ){
+    //     coverImageLocalPath= req.files?.coverImage[0]?.path;
+    //  }
 
      // check is avatar localpath exists 
      if(!avtarLocalPath){
@@ -46,6 +52,7 @@ import { ApiResponse } from "../utils/ApiResponse.js";
      //uploading avatar and coverImage on cloudinary
     const avatar = await uploadOnCloudinary(avtarLocalPath);
     const coverImage = await uploadOnCloudinary(coverImageLocalPath);
+ 
 
     if(!avatar){
         throw new ApiError(400,"avatar file is required")
