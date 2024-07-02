@@ -5,6 +5,23 @@
 import { upload } from "../middlerwares/multer.middleware.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 
+ const generateAccessTokenAndRefreshToken = async (userId) =>{
+   try {
+    const user = await User.findById(userId)
+    const accessToken = user.generateAccessToken()
+    const refreshToken = user.generateRefreshToken()
+    user.refreshToken = refreshToken
+    await user.save({validateBeforeSave:false})
+
+    return {accessToken,refreshToken}
+
+   } catch (error) {
+        throw new ApiError(500,"somting went wrong")
+   }
+
+
+ }
+
  const registerUser = asyncHandler(async(req,res)=>{
     //get user details from frontend 
     //validation - not empty
@@ -83,8 +100,95 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 
  })
 
- 
+ const login = asyncHandler(async (req,res)=>{
+    // getting user credentials from frontend
+    // username or email
+    // find the user
+    // password check
+    // assign access token and refresh token
+    // send cookies
+
+    const {username,email,password} = req.body
+
+    if(!username || !email ){
+        throw new ApiError(400,"username or email required")
+    }
+
+   const user = await User.findOne({
+        $or : [{username},{email}]
+    })
+
+    if(!user){
+        throw new ApiError(404,"user does not exist")
+    }
+
+    const isPasswordValid = await user.isPasswordCorrect(password)
+
+    if(!isPasswordValid){
+        throw new ApiError(401,"Invalid user credentilas")
+    }
 
 
+   const {accessToken,refreshToken} = await generateAccessTokenAndRefreshToken(user._id)
 
- export {registerUser}
+  // getting updated user 
+  const loggedInUser = User.findById(user._id).
+  select("-password -refreshToken")
+   
+  //prevents modifying cookies bby user
+  const options = {
+    httpOnly : true,
+    secure : true
+  }
+
+  return res
+  .status(200)
+  .cookie("accessToken",accessToken,options)
+  .cookie("refreshToken",refreshToken,options)
+  .json(
+    new ApiResponse(
+        200,
+        {
+            loggedInUser,
+            accessToken,
+            refreshToken
+        },
+        "User Logged In Successfully"
+        
+    )
+  )
+ })
+
+ const logoutUser = asyncHandler(async(req,res)=>{
+    await User.findByIdAndUpdate(
+        req.user._id,
+        {
+            $set:{
+                refreshToken : undefined
+            }
+        },
+        {
+            new: true
+        }
+    )
+
+    const options = {
+        httpOnly : true,
+        secure : true
+      }
+
+      return res
+      .status(200)
+      .clearCookie("accessToken",options)
+      .clearCookie("refreshToken",options)
+      .json( new ApiResponse(200,{},"user logged out"))
+
+
+ })
+
+
+ export {   
+    registerUser,
+    login,
+    logoutUser
+}
