@@ -5,6 +5,8 @@
 import { upload } from "../middlerwares/multer.middleware.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken"
+import { syncIndexes } from "mongoose";
+import { application } from "express";
 
  const generateAccessTokenAndRefreshToken = async (userId) =>{
    try {
@@ -217,23 +219,159 @@ return res
     .status(200)
     .cookie("accessToken",accessToken,options)
     .cookie("refreshtoken",newRefreshToken,options)
-    .json(
-     200,
-     {
-         accessToken, refreshToken: newRefreshToken
-     },
-     "Accedd Token refreshed"
-    )
+    .json( new ApiResponse(
+        200,
+        {
+            accessToken, refreshToken: newRefreshToken
+        },
+        "Accedd Token refreshed"
+    ))
    } catch (error) {
     throw new ApiError(401,error?.message || "invalid refresh token")
    }
    
  })
 
+ const changeCurrentPassword = asyncHandler(async(req,res)=>{
+
+    const{currentPassword,newPassword} = req.body
+    const user  = User.findById(req.user?._id)
+    const isPasswordCorrect = await user.isPasswordCorrect(currentPassword)
+
+    if(!isPasswordCorrect){
+        throw new ApiError(400,"Incorect current password")
+    }
+
+    user.password = newPassword
+    await user.save({validateBeforeSave:false})
+
+    return res
+    .status(200)
+    .json(new ApiResponse(
+        200,
+        {},
+        "password changed successfully"
+    ))
+
+ })
+
+ const getCurrentUser = asyncHandler(async(req,res)=>{
+    return res
+    .status(200)
+    .json(new ApiResponse(
+        200,
+        req.user,
+        "current user fetched successfully"
+    ))
+ })
+
+const updateAccountDetails = asyncHandler(async(req,res)=>{
+    const {fullname,email} = req.body
+
+    if(!fullname || !email){
+        throw new ApiError(400,"All fields are required")
+    }
+
+    const user = await User.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set: {fullname,email}
+        },
+        {
+            new:true
+        }
+    ).select("-password -refreshToken")
+
+    return res
+    .status(200)
+    .json( new ApiResponse(
+        200,
+        user,
+        "Account Details upated scuccessfully"
+    ))
+
+})
+
+const updateAvatarImage = asyncHandler(async(req,res)=>{
+   const avatarLocalPath = req.file?.path
+
+   if(!avatarLocalPath){
+    throw new ApiError(400,"avatar file missing")
+   }
+
+   const avatar = await uploadOnCloudinary(avatarLocalPath)
+
+   if(!avatar.url){
+    throw new ApiError(500,"Error while uploading on avatar")
+   }
+
+   const user = await User.findByIdAndUpdate(
+    req.user?._id,
+    {
+       $set:{
+        avatar: avatar.url
+       }
+    },
+    {new:true}
+   ).select("-password")
+
+
+   return res
+   .status(200)
+   .json(
+        new ApiResponse(
+            200,
+            user,
+            "avatar image updated successfully"
+        )
+   )
+
+})
+
+const updateCoverImage = asyncHandler(async(req,res)=>{
+    const coverImageLocalPath = req.file?.path
+ 
+    if(!coverImageLocalPath){
+     throw new ApiError(400,"cover image file missing")
+    }
+ 
+    const coverImage = await uploadOnCloudinary(coverImageLocalPath)
+ 
+    if(!coverImage.url){
+     throw new ApiError(500,"Error while uploading on cover image")
+    }
+ 
+    const user = await User.findByIdAndUpdate(
+     req.user?._id,
+     {
+        $set:{
+            coverImage: coverImage.url
+        }
+     },
+     {new:true}
+    ).select("-password")
+ 
+ 
+    return res
+    .status(200)
+    .json(
+         new ApiResponse(
+             200,
+             user,
+             "coverImage image updated successfully"
+         )
+    )
+ 
+ })
 
  export {   
     registerUser,
     login,
     logoutUser,
-    refreshAccessToken
+    refreshAccessToken,
+    changeCurrentPassword,
+    getCurrentUser,
+    updateAccountDetails,
+    updateAvatarImage,
+    updateCoverImage
 }
