@@ -5,7 +5,7 @@
 import { upload } from "../middlerwares/multer.middleware.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken"
-import { syncIndexes } from "mongoose";
+import mongoose, { syncIndexes } from "mongoose";
 import { application } from "express";
 
  const generateAccessTokenAndRefreshToken = async (userId) =>{
@@ -435,6 +435,60 @@ const getUserChannelProfile = asyncHandler(async(req,res)=>{
     )
 })
 
+const getWatchHistory = asyncHandler(async(req,res)=>{
+    const user = await User.aggregate([
+        {
+            $match:{
+                _id: new mongoose.Types.ObjectId(req.user._id)
+            }
+        },
+        {
+            $lookup:{
+                from:"videos",
+                localField:"watchHistory",
+                foreignField:"_id",
+                as:"watchHistory",
+                pipeline:[
+                    {
+                        $lookup:{
+                            from:"users",
+                            localField:"owner",
+                            foreignField:"_id",
+                            as:"Owner",
+                            pipeline:[
+                                {
+                                    $project:{
+                                        fullname:1,
+                                        username:1,
+                                        avatar:1
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        $addFields:{
+                            $first: "$Owner"
+                        }
+                    }
+                    
+                 ]       
+            }
+        }
+    ])
+
+    return res
+    .status(200)
+    .json(
+        new ApiResponse(
+            200,
+            user[0].watchHistory,
+            "watch history fetched successfully"
+        )
+    )
+})
+
+
 
 
 
@@ -448,5 +502,6 @@ const getUserChannelProfile = asyncHandler(async(req,res)=>{
     updateAccountDetails,
     updateAvatarImage,
     updateCoverImage,
-    getUserChannelProfile
+    getUserChannelProfile,
+    getWatchHistory
 }
