@@ -7,6 +7,7 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken"
 import mongoose, { syncIndexes } from "mongoose";
 import { application } from "express";
+import { use } from "bcrypt/promises.js";
 
  const generateAccessTokenAndRefreshToken = async (userId) =>{
    try {
@@ -14,6 +15,7 @@ import { application } from "express";
     const accessToken = user.generateAccessToken()
     const refreshToken = user.generateRefreshToken()
     user.refreshToken = refreshToken
+
     await user.save({validateBeforeSave:false})
 
     return {accessToken,refreshToken}
@@ -161,28 +163,34 @@ return res
  })
 
  const logoutUser = asyncHandler(async(req,res)=>{
-    await User.findByIdAndUpdate(
-        req.user._id,
-        {
-            $set:{
-                refreshToken : undefined
-            }
-        },
-        {
-            new: true
-        }
-    )
-
-    const options = {
-        httpOnly : true,
-        secure : true
-      }
-
-      return res
-      .status(200)
-      .clearCookie("accessToken",options)
-      .clearCookie("refreshToken",options)
-      .json( new ApiResponse(200,{},"user logged out"))
+     try {
+        await User.findByIdAndUpdate(
+           req.user._id,
+           
+           {
+               //try using $unset 
+               $unset:{
+                   refreshToken : 1
+               }
+           },
+           {
+               new: true
+           }
+       )
+   
+       const options = {
+           httpOnly : true,
+           secure : true
+         }
+   
+         return res
+         .status(200)
+         .clearCookie("accessToken",options)
+         .clearCookie("refreshToken",options)
+         .json( new ApiResponse(200,{},"user logged out"))
+     } catch (error) {
+        console.log(error.message);
+     }
 
 
  })
@@ -198,7 +206,7 @@ return res
    try {
     const decodedToken = jwt.verify(incomingRefreshToken, process.env.REFRESH_TOKEN_SECRET)
  
-    const user = User.findById(decodedToken?._id)
+    const user = await User.findById(decodedToken?._id)
  
     if(!user){
      throw new ApiError(401,"Invalis refresh token")
@@ -213,18 +221,19 @@ return res
      secure : true
     }
  
-    const {accessToken, newRefreshToken} = await generateAccessTokenAndRefreshToken(user._id)
- 
+    const {accessToken, refreshToken} = await generateAccessTokenAndRefreshToken(user._id)
+    
     return res
     .status(200)
     .cookie("accessToken",accessToken,options)
-    .cookie("refreshtoken",newRefreshToken,options)
+    .cookie("refreshToken",refreshToken,options)
     .json( new ApiResponse(
         200,
         {
-            accessToken, refreshToken: newRefreshToken
+            accessToken, 
+            newRefreshToken : refreshToken
         },
-        "Accedd Token refreshed"
+        "Access Token refreshed"
     ))
    } catch (error) {
     throw new ApiError(401,error?.message || "invalid refresh token")
@@ -235,7 +244,7 @@ return res
  const changeCurrentPassword = asyncHandler(async(req,res)=>{
 
     const{currentPassword,newPassword} = req.body
-    const user  = User.findById(req.user?._id)
+    const user  = await User.findById(req.user?._id)
     const isPasswordCorrect = await user.isPasswordCorrect(currentPassword)
 
     if(!isPasswordCorrect){
@@ -468,7 +477,7 @@ const getWatchHistory = asyncHandler(async(req,res)=>{
                     },
                     {
                         $addFields:{
-                            $first: "$Owner"
+                           owner : {$first: "$Owner"}
                         }
                     }
                     
@@ -487,9 +496,6 @@ const getWatchHistory = asyncHandler(async(req,res)=>{
         )
     )
 })
-
-
-
 
 
  export {   
